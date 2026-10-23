@@ -1,0 +1,371 @@
+<title>출장비 계산기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<style>
+/* 왼쪽 입력 폼 + 오른쪽 A4 정산서 미리보기. 좁은 화면에서는 한 열로 쌓임 */
+:root{--bg:#f4f6f9;--card:#fff;--ink:#1f2933;--mute:#5d6b7a;--line:#d9dee5;--brand:#2358c4;--brand-d:#1b459c;--on-brand:#fff;--err:#c0392b;
+  --field:#fff;--sub:#e8edf5;--delbg:#fdecea;--paper:#fff;--paper-ink:#1f2933;--paper-line:#444;--paper-head:#eef1f6;--paper-tot:#f7f8fb;--paper-mute:#555}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#14181f;--card:#1c222b;--ink:#e6eaf0;--mute:#9aa7b6;--line:#333c49;--brand:#5b8def;--brand-d:#7aa2f5;--on-brand:#0c1220;--err:#ff8a7a;--field:#12161c;--sub:#2a3342;--delbg:#3a2321;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14181f;--card:#1c222b;--ink:#e6eaf0;--mute:#9aa7b6;--line:#333c49;--brand:#5b8def;--brand-d:#7aa2f5;--on-brand:#0c1220;--err:#ff8a7a;--field:#12161c;--sub:#2a3342;--delbg:#3a2321;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;font-size:14px}
+header{background:var(--brand);color:var(--on-brand);padding:14px max(16px,env(safe-area-inset-right,0px)) 14px max(16px,env(safe-area-inset-left,0px));font-size:18px;font-weight:700}
+.wrap{display:grid;grid-template-columns:minmax(0,480px) minmax(0,1fr);gap:16px;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1300px;margin:0 auto}
+.wrap>*{min-width:0}
+.paper-scroll{overflow-x:auto}
+@media(max-width:900px){.wrap{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.card h2{margin:0 0 10px;font-size:15px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+label{display:block;font-size:12px;color:var(--mute);margin-bottom:3px}
+input,select,textarea{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font:inherit;background:var(--field);color:var(--ink)}
+textarea{resize:vertical;min-height:54px}
+input:focus,select:focus,textarea:focus{outline:2px solid #9db8f0;border-color:var(--brand)}
+.span2{grid-column:1/-1}
+.row{border:1px dashed var(--line);border-radius:8px;padding:8px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.row .chk{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ink)}
+.row .chk input{width:auto}
+.btn{border:0;border-radius:6px;padding:8px 12px;font:inherit;font-weight:600;cursor:pointer;background:var(--brand);color:var(--on-brand)}
+.btn:hover{background:var(--brand-d)}
+.btn.sub{background:var(--sub);color:var(--ink)}
+.btn.del{background:var(--delbg);color:var(--err);padding:4px 8px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.note{font-size:12px;color:var(--mute);margin-top:6px}
+#err{color:var(--err);font-size:13px;margin-top:6px;min-height:16px}
+.sheet{background:var(--paper);color:var(--paper-ink);border:1px solid var(--line);border-radius:4px;padding:28px 30px;max-width:794px;min-width:520px;margin:0 auto;font-family:"Malgun Gothic",sans-serif}
+.sheet h1{text-align:center;font-size:22px;margin:0 0 18px;letter-spacing:4px}
+.sheet table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px}
+.sheet th,.sheet td{border:1px solid var(--paper-line);padding:6px 8px;text-align:left}
+.sheet th{background:var(--paper-head);width:16%}
+.sheet td.r,.sheet th.r{text-align:right}
+.sheet th.c{text-align:center;width:auto}
+.sheet .tot td{font-weight:700;background:var(--paper-tot)}
+.sheet .sign th{text-align:center;width:33%}
+.sheet .sign td{height:56px}
+.sheet .foot{text-align:right;font-size:12px;margin-top:6px}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;opacity:0;transition:.25s;pointer-events:none;z-index:9}
+#toast.on{opacity:.95}
+.sheet .memo-note{font-size:12px;color:var(--paper-mute);margin-bottom:10px}
+</style>
+<header>✈ 출장비 계산기</header>
+<div class="wrap">
+<div class="form">
+  <div class="card">
+    <h2>1. 출장 기본정보</h2>
+    <div class="grid2">
+      <div><label>소속/부서</label><input data-k="info.dept"></div>
+      <div><label>성명 *</label><input data-k="info.name"></div>
+      <div><label>직급</label><input data-k="info.rank"></div>
+      <div><label>출장지(목적지) *</label><input data-k="info.dest"></div>
+      <div class="span2"><label>출장 목적</label><input data-k="info.purpose"></div>
+      <div><label>출발일 *</label><input type="date" data-k="info.start"></div>
+      <div><label>귀환일 *</label><input type="date" data-k="info.end"></div>
+    </div>
+    <div id="err"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. 단가 설정 <small style="font-weight:400;color:var(--mute)">(회사 규정에 맞게 수정하세요)</small></h2>
+    <div class="grid2">
+      <div><label>일비 (원/일)</label><input type="number" min="0" data-k="rates.daily"></div>
+      <div><label>식비 (원/일)</label><input type="number" min="0" data-k="rates.meal"></div>
+      <div><label>숙박비 (원/박)</label><input type="number" min="0" data-k="rates.lodging"></div>
+      <div><label>자차 (원/km)</label><input type="number" min="0" data-k="rates.km"></div>
+      <div><label>일비 일수 (비우면 자동)</label><input type="number" min="0" data-k="cnt.daily"></div>
+      <div><label>식비 일수 (비우면 자동)</label><input type="number" min="0" data-k="cnt.meal"></div>
+      <div><label>숙박 박수 (비우면 자동)</label><input type="number" min="0" data-k="cnt.lodging"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. 교통비</h2>
+    <div id="trRows"></div>
+    <button class="btn sub" id="addTr">+ 교통비 추가</button>
+  </div>
+
+  <div class="card">
+    <h2>4. 기타 비용</h2>
+    <div id="otRows"></div>
+    <button class="btn sub" id="addOt">+ 기타 비용 추가</button>
+  </div>
+
+  <div class="card">
+    <h2>5. 정산 옵션</h2>
+    <div class="grid2">
+      <div><label>선지급(가지급)액</label><input type="number" min="0" data-k="advance"></div>
+      <div class="span2"><label>비고</label><textarea data-k="memo"></textarea></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="btns">
+      <button class="btn" id="bDocx">Word 다운로드</button>
+      <button class="btn" id="bShare">공유 링크 만들기</button>
+      <button class="btn sub" id="bReset">초기화</button>
+    </div>
+    <div id="shareBox" style="display:none;margin-top:10px">
+      <input id="shareUrl" readonly>
+      <div class="btns" style="margin-top:6px"><button class="btn sub" id="bCopy">링크 복사</button></div>
+      <div class="note" id="shareNote"></div>
+    </div>
+    <div class="note">인쇄는 Word 파일을 내려받은 뒤 Word에서 인쇄하세요. 공유 링크에는 입력한 내용이 저장되며, 링크를 열 수 있는 사람은 누구나 그 내용을 볼 수 있으니 민감한 정보는 주의하세요.</div>
+  </div>
+</div>
+
+<div class="paper-scroll"><div class="sheet" id="sheet"></div></div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ===== 기본 단가 (회사 규정에 맞게 여기서 수정) =====
+const DEFAULT_RATES = { daily: 20000, meal: 30000, lodging: 80000, km: 200 };
+const TR_TYPES = ["KTX", "버스", "항공", "자차", "택시", "기타"];
+const STORE = "trip-calc-v1";
+
+const blank = () => ({
+  info: { dept:"", name:"", rank:"", purpose:"", dest:"", start:"", end:"" },
+  rates: { ...DEFAULT_RATES },
+  cnt: { daily:"", meal:"", lodging:"" },
+  tr: [{ type:"KTX", route:"", amount:"", km:"", round:true }],
+  ot: [],
+  advance: "", memo: ""
+});
+let S = blank();
+
+const $ = id => document.getElementById(id);
+const won = n => Math.round(n).toLocaleString("ko-KR") + "원";
+const num = v => { const n = parseInt(v, 10); return isFinite(n) && n > 0 ? n : 0; };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const get = (o, p) => p.split(".").reduce((a, k) => a[k], o);
+const set = (o, p, v) => { const ks = p.split("."); const l = ks.pop(); ks.reduce((a, k) => a[k], o)[l] = v; };
+
+function toast(msg){ const t = $("toast"); t.textContent = msg; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 1800); }
+
+// ===== 계산 =====
+function calc(s){
+  const a = new Date(s.info.start), b = new Date(s.info.end);
+  let nights = 0, days = 0, dateErr = "";
+  if (s.info.start && s.info.end) {
+    if (b < a) dateErr = "귀환일이 출발일보다 빠릅니다.";
+    else { nights = Math.round((b - a) / 864e5); days = nights + 1; }
+  }
+  const items = [];
+  s.tr.forEach(r => {
+    const base = r.type === "자차" ? num(r.km) * num(s.rates.km) : num(r.amount);
+    const amt = base * (r.round ? 2 : 1);
+    if (!amt && !r.route) return;
+    const desc = [r.route, r.type === "자차" ? `${num(r.km)}km × ${num(s.rates.km).toLocaleString()}원` : "", r.round ? "왕복" : "편도"].filter(Boolean).join(" / ");
+    items.push({ cat: "교통비 (" + r.type + ")", desc, amt });
+  });
+  const pick = (c, auto) => s.cnt[c] === "" ? auto : num(s.cnt[c]);
+  [["daily","일비",days,"일"],["meal","식비",days,"일"],["lodging","숙박비",nights,"박"]].forEach(([k, name, auto, u]) => {
+    const n = pick(k, auto), amt = n * num(s.rates[k]);
+    if (amt) items.push({ cat: name, desc: `${num(s.rates[k]).toLocaleString()}원 × ${n}${u}`, amt });
+  });
+  s.ot.forEach(r => { const amt = num(r.amount); if (amt || r.name) items.push({ cat: "기타", desc: r.name, amt }); });
+  const sum = c => items.filter(i => i.cat.startsWith(c)).reduce((x, i) => x + i.amt, 0);
+  const total = items.reduce((x, i) => x + i.amt, 0);
+  return { items, total, days, nights, dateErr, advance: num(s.advance), settle: total - num(s.advance),
+           sub: { 교통비: sum("교통비"), 일비: sum("일비"), 식비: sum("식비"), 숙박비: sum("숙박비"), 기타: sum("기타") } };
+}
+const periodText = (s, c) => s.info.start && s.info.end && !c.dateErr ? `${s.info.start} ~ ${s.info.end} (${c.nights}박 ${c.days}일)` : "";
+const settleText = c => c.settle >= 0 ? `${won(c.settle)} (지급)` : `${won(-c.settle)} (반납)`;
+const today = () => new Date().toISOString().slice(0, 10);
+
+// ===== 미리보기 =====
+function renderSheet(){
+  const c = calc(S), i = S.info;
+  $("err").textContent = c.dateErr;
+  const rows = c.items.map(x => `<tr><td>${esc(x.cat)}</td><td>${esc(x.desc)}</td><td class="r">${won(x.amt)}</td></tr>`).join("")
+    || `<tr><td colspan="3" style="text-align:center;color:#888">입력된 비용이 없습니다</td></tr>`;
+  const subs = Object.entries(c.sub).filter(([, v]) => v).map(([k, v]) => `${k} ${won(v)}`).join(" · ");
+  $("sheet").innerHTML = `
+  <h1>출 장 비 정 산 서</h1>
+  <table>
+    <tr><th>소속/부서</th><td>${esc(i.dept)}</td><th>성명/직급</th><td>${esc(i.name)} ${esc(i.rank)}</td></tr>
+    <tr><th>출장지</th><td>${esc(i.dest)}</td><th>출장기간</th><td>${esc(periodText(S, c))}</td></tr>
+    <tr><th>출장 목적</th><td colspan="3">${esc(i.purpose)}</td></tr>
+  </table>
+  <table>
+    <tr><th class="c" style="width:22%">구분</th><th class="c">내역</th><th class="c" style="width:22%">금액</th></tr>
+    ${rows}
+    <tr class="tot"><td colspan="2">총 출장비</td><td class="r">${won(c.total)}</td></tr>
+    <tr><td colspan="2">선지급(가지급)액</td><td class="r">${won(c.advance)}</td></tr>
+    <tr class="tot"><td colspan="2">최종 정산금</td><td class="r">${settleText(c)}</td></tr>
+  </table>
+  ${subs ? `<div class="memo-note">소계: ${subs}</div>` : ""}
+  <table><tr><th style="width:16%">비고</th><td style="height:44px;white-space:pre-wrap">${esc(S.memo)}</td></tr></table>
+  <table class="sign"><tr><th>담당</th><th>팀장</th><th>대표</th></tr><tr><td></td><td></td><td></td></tr></table>
+  <div class="foot">작성일: ${today()}</div>`;
+  save();
+}
+
+// ===== 동적 행 =====
+function renderRows(){
+  $("trRows").innerHTML = S.tr.map((r, n) => `
+    <div class="row" data-n="${n}">
+      <div><label>구분</label><select data-tr="type">${TR_TYPES.map(t => `<option${t === r.type ? " selected" : ""}>${t}</option>`).join("")}</select></div>
+      <div><label>구간</label><input data-tr="route" value="${esc(r.route)}" placeholder="서울-부산"></div>
+      ${r.type === "자차"
+        ? `<div><label>거리(km)</label><input type="number" min="0" data-tr="km" value="${esc(r.km)}"></div>`
+        : `<div><label>금액(원)</label><input type="number" min="0" data-tr="amount" value="${esc(r.amount)}"></div>`}
+      <div style="display:flex;justify-content:space-between;align-items:end">
+        <label class="chk"><input type="checkbox" data-tr="round"${r.round ? " checked" : ""}> 왕복(×2)</label>
+        <button class="btn del" data-del="tr">삭제</button></div>
+    </div>`).join("");
+  $("otRows").innerHTML = S.ot.map((r, n) => `
+    <div class="row" data-n="${n}">
+      <div><label>항목명</label><input data-ot="name" value="${esc(r.name)}" placeholder="주차비, 통행료 등"></div>
+      <div><label>금액(원)</label><input type="number" min="0" data-ot="amount" value="${esc(r.amount)}"></div>
+      <div class="span2" style="text-align:right"><button class="btn del" data-del="ot">삭제</button></div>
+    </div>`).join("");
+}
+
+function syncStatic(){
+  document.querySelectorAll("[data-k]").forEach(el => el.value = get(S, el.dataset.k) ?? "");
+}
+
+// ===== 이벤트 =====
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (el.dataset.k) { set(S, el.dataset.k, el.value); renderSheet(); return; }
+  const grp = el.dataset.tr ? "tr" : el.dataset.ot ? "ot" : null;
+  if (!grp) return;
+  const n = +el.closest(".row").dataset.n, f = el.dataset[grp];
+  S[grp][n][f] = el.type === "checkbox" ? el.checked : el.value;
+  if (f === "type") renderRows();
+  renderSheet();
+});
+document.addEventListener("click", e => {
+  const d = e.target.dataset.del;
+  if (d) { S[d].splice(+e.target.closest(".row").dataset.n, 1); renderRows(); renderSheet(); }
+});
+$("addTr").onclick = () => { S.tr.push({ type:"KTX", route:"", amount:"", km:"", round:true }); renderRows(); renderSheet(); };
+$("addOt").onclick = () => { S.ot.push({ name:"", amount:"" }); renderRows(); renderSheet(); };
+let resetArmed = null;
+$("bReset").onclick = () => {
+  if (!resetArmed) {
+    $("bReset").textContent = "한 번 더 누르면 초기화";
+    resetArmed = setTimeout(() => { resetArmed = null; $("bReset").textContent = "초기화"; }, 3000);
+    return;
+  }
+  clearTimeout(resetArmed); resetArmed = null; $("bReset").textContent = "초기화";
+  shared = false; S = blank(); syncStatic(); renderRows(); renderSheet(); $("shareBox").style.display = "none";
+};
+
+function validate(){
+  const c = calc(S), miss = [];
+  if (!S.info.name) miss.push("성명");
+  if (!S.info.dest) miss.push("출장지");
+  if (!S.info.start || !S.info.end) miss.push("출장 일정");
+  if (miss.length) { toast(`필수 항목을 입력하세요: ${miss.join(", ")}`); return false; }
+  if (c.dateErr) { toast(c.dateErr); return false; }
+  return true;
+}
+
+// ===== 공유 링크 (db에 저장 후 #토큰으로 열기) =====
+const APP_URL = "https://claude.ai/artifact/RN5hwm49Th4P16FyFaVTiC";
+let shared = false;
+const mergeState = d => ({ ...blank(), ...d, info: { ...blank().info, ...d.info }, rates: { ...DEFAULT_RATES, ...d.rates }, cnt: { ...blank().cnt, ...d.cnt } });
+const newToken = () => "s" + Array.from(crypto.getRandomValues(new Uint8Array(10)), b => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+
+$("bShare").onclick = async () => {
+  if (!validate()) return;
+  const db = await window.claude?.use("db");
+  if (!db) { toast("이 화면에서는 공유 링크를 만들 수 없습니다 (로그인이 필요할 수 있습니다)"); return; }
+  const id = newToken();
+  try {
+    await db.doc("shares/" + id).set({ data: JSON.stringify(S), createdAt: Date.now() });
+  } catch (err) { toast("링크 저장에 실패했습니다. 편집 권한이 필요할 수 있습니다"); return; }
+  $("shareUrl").value = APP_URL + "#" + id;
+  $("shareBox").style.display = "block";
+  $("shareNote").textContent = "이 링크를 열면 지금 입력한 정산서가 그대로 표시됩니다. 이후 수정한 내용은 링크에 반영되지 않으니 수정하면 새 링크를 만드세요.";
+};
+$("bCopy").onclick = async () => {
+  const u = $("shareUrl").value;
+  try { await navigator.clipboard.writeText(u); toast("복사되었습니다"); }
+  catch { $("shareUrl").select(); toast("링크를 선택했습니다. 직접 복사하세요"); }
+};
+async function loadShared(){
+  const m = location.hash.match(/^#(s[a-z0-9]{10})$/);
+  if (!m) return;
+  const db = await window.claude?.use("db");
+  if (!db) { toast("공유된 정산서를 불러오려면 로그인이 필요합니다"); return; }
+  try {
+    const snap = await db.doc("shares/" + m[1]).get();
+    if (!snap.exists) { toast("공유된 정산서를 찾을 수 없습니다"); return; }
+    S = mergeState(JSON.parse(snap.data().data));
+    shared = true;
+    syncStatic(); renderRows(); renderSheet();
+    toast("공유된 정산서를 불러왔습니다");
+  } catch { toast("공유된 정산서를 불러오지 못했습니다"); }
+}
+
+// ===== 로컬 저장 =====
+function save(){ if (shared) return; try { localStorage.setItem(STORE, JSON.stringify(S)); } catch {} }
+function loadLocal(){
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE) || "null");
+    if (d) S = mergeState(d);
+  } catch {}
+}
+
+// ===== Word =====
+$("bDocx").onclick = async () => {
+  if (!validate()) return;
+  if (!window.docx) { toast("Word 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요"); return; }
+  try {
+    const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, AlignmentType, ShadingType } = docx;
+    const c = calc(S), i = S.info, FONT = "Malgun Gothic";
+    const W = 9600;
+    const cell = (text, o = {}) => new TableCell({
+      width: { size: o.w || 2400, type: WidthType.DXA },
+      columnSpan: o.span, margins: { top: 80, bottom: 80, left: 100, right: 100 },
+      shading: o.shade ? { type: ShadingType.CLEAR, fill: o.shade, color: "auto" } : undefined,
+      children: String(text ?? "").split("\n").map(t => new Paragraph({
+        alignment: o.align || AlignmentType.LEFT,
+        children: [new TextRun({ text: t, bold: !!o.bold, font: FONT, size: 20 })] }))
+    });
+    const H = "EEF1F6", R = AlignmentType.RIGHT, C = AlignmentType.CENTER;
+    const infoTbl = new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [1500, 3300, 1500, 3300], rows: [
+      new TableRow({ children: [cell("소속/부서", { w:1500, shade:H, bold:true }), cell(i.dept, { w:3300 }), cell("성명/직급", { w:1500, shade:H, bold:true }), cell(`${i.name} ${i.rank}`, { w:3300 })] }),
+      new TableRow({ children: [cell("출장지", { w:1500, shade:H, bold:true }), cell(i.dest, { w:3300 }), cell("출장기간", { w:1500, shade:H, bold:true }), cell(periodText(S, c), { w:3300 })] }),
+      new TableRow({ children: [cell("출장 목적", { w:1500, shade:H, bold:true }), cell(i.purpose, { w:8100, span:3 })] })
+    ]});
+    const body = c.items.map(x => new TableRow({ children: [cell(x.cat, { w:2400 }), cell(x.desc, { w:5200 }), cell(won(x.amt), { w:2000, align:R })] }));
+    const costTbl = new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [2400, 5200, 2000], rows: [
+      new TableRow({ tableHeader: true, children: [cell("구분", { w:2400, shade:H, bold:true, align:C }), cell("내역", { w:5200, shade:H, bold:true, align:C }), cell("금액", { w:2000, shade:H, bold:true, align:C })] }),
+      ...body,
+      new TableRow({ children: [cell("총 출장비", { w:7600, span:2, bold:true, shade:"F7F8FB" }), cell(won(c.total), { w:2000, align:R, bold:true, shade:"F7F8FB" })] }),
+      new TableRow({ children: [cell("선지급(가지급)액", { w:7600, span:2 }), cell(won(c.advance), { w:2000, align:R })] }),
+      new TableRow({ children: [cell("최종 정산금", { w:7600, span:2, bold:true, shade:"F7F8FB" }), cell(settleText(c), { w:2000, align:R, bold:true, shade:"F7F8FB" })] })
+    ]});
+    const memoTbl = new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [1500, 8100], rows: [
+      new TableRow({ children: [cell("비고", { w:1500, shade:H, bold:true }), cell(S.memo || " ", { w:8100 })] })] });
+    const signTbl = new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [3200, 3200, 3200], rows: [
+      new TableRow({ children: ["담당", "팀장", "대표"].map(t => cell(t, { w:3200, shade:H, bold:true, align:C })) }),
+      new TableRow({ height: { value: 1000, rule: "atLeast" }, children: [cell(" ", { w:3200 }), cell(" ", { w:3200 }), cell(" ", { w:3200 })] })] });
+    const gap = () => new Paragraph({ children: [new TextRun({ text: " ", size: 12 })] });
+    const doc = new Document({ sections: [{
+      properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1000, bottom: 1000, left: 1153, right: 1153 } } },
+      children: [
+        new Paragraph({ alignment: C, spacing: { after: 300 }, children: [new TextRun({ text: "출 장 비 정 산 서", bold: true, font: FONT, size: 40 })] }),
+        infoTbl, gap(), costTbl, gap(), memoTbl, gap(), signTbl,
+        new Paragraph({ alignment: R, spacing: { before: 120 }, children: [new TextRun({ text: "작성일: " + today(), font: FONT, size: 18 })] })
+      ] }] });
+    const blob = await Packer.toBlob(doc);
+    const dl = await window.claude?.use("downloads");
+    if (!dl) { toast("이 화면에서는 파일 저장을 지원하지 않습니다"); return; }
+    await dl.save({ filename: `출장비정산서_${i.name}_${today()}.docx`, data: blob });
+    toast("Word 파일을 저장했습니다");
+  } catch (err) {
+    if (err && err.code === "declined") return;
+    console.error(err); toast("Word 파일 생성 중 오류가 발생했습니다");
+  }
+};
+
+// ===== 시작 =====
+loadLocal();
+syncStatic(); renderRows(); renderSheet();
+loadShared();
+</script>
